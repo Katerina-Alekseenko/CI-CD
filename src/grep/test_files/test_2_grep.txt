@@ -1,0 +1,5 @@
+Hello
+Its the second test file for grep
+
+ The "egrep" variant supports an extended regular expression syntax added by Alfred Aho after Ken Thompson's original regular expression implementation.
+ The "fgrep" searches for any of a list of fixed strings using the Aho–Corasick string matching algorithm.

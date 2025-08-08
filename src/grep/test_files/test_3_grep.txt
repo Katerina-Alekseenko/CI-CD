@@ -1,0 +1,3 @@
+The third test file
+
+    first second third
