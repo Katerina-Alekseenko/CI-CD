@@ -1,249 +1,220 @@
 #include "my_grep.h"
 
-int main(int argc, char **argv) {
-  int flag_err = 1;
-  if (argc > 2) {
-    grep_flags select = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    char pattern[BUFFER] = {0};
-    int result = 0;
-    char *optstring = "violnce:f:sh?";
-    while ((result = getopt_long(argc, argv, optstring, 0, NULL)) != -1) {
-      flag_err = get_flags(&select, result, pattern);
-    }
-    if ((select.e || select.f) & (argc < 4)) {
-      flag_err = 2;
-    }
-    if (flag_err != 2) {
-      variant((const char **)argv, pattern, &select);
-    }
-  }
-  return flag_err;
-}
-
-int get_flags(grep_flags *select, int result, char *pattern) {
-  int flag_err = 0;
-  switch (result) {
-    case 'v':
-      select->v = 1;
-      break;
-    case 'i':
-      select->i = 1;
-      break;
-    case 'o':
-      select->o = 1;
-      break;
-    case 'l':
-      select->l = 1;
-      break;
-    case 'n':
-      select->n = 1;
-      break;
-    case 'c':
-      select->c = 1;
-      break;
-    case 'e':
-      select->e = 1;
-      get_pattern(pattern, optarg);
-      break;
-    case 'f':
-      select->f = 1;
-      flag_err = flag_f_handler(pattern);
-      break;
-    case 's':
-      select->s = 1;
-      break;
-    case 'h':
-      select->h = 1;
-      break;
-    case '?':
-      flag_err = 2;
-  }
-  if (select->v) select->o = 0;
-  return flag_err;
-}
-
-int variant(const char **argv, const char *pattern, grep_flags const *select) {
-  int flag_err = 1;
-  int count_files = 0;
-  int flag_no_pattern = 0;
-  if (select->e || select->f) {
-    count_files = file_count(argv, flag_no_pattern);
+int main(int argc, char *argv[]) {
+  if (argc == 1) {
+    print_error();
   } else {
-    flag_no_pattern = 1;
-    pattern = argv[optind];
-    count_files = file_count(argv, flag_no_pattern);
-  }
-  flag_err = comp_reg(argv, pattern, count_files, flag_no_pattern, select);
-  return flag_err;
-}
-
-void get_pattern(char *pattern, const char *string) {
-  if (0 == *string) {
-    strcpy(pattern, ".*\0");
-  }
-  if (0 == pattern[0]) {
-    strcpy(pattern, string);
-  } else if (strcmp(pattern, ".*") != 0) {
-    strcat(pattern, "|");
-    strcat(pattern, string);
-  }
-}
-
-int file_count(const char **argv, int flag_no_pattern) {
-  int count_files = 0;
-  int count = optind;
-  if (flag_no_pattern) {
-    count += 1;
-  }
-  for (int i = count; NULL != argv[i]; i++) {
-    if (argv[i][0] != '-') {
-      count_files += 1;
+    grep_flags select = {0};
+    char templates[BUFFER] = {0};
+    int count_flags = 0;
+    int result = 0;
+    result = get_flags(argc, argv, &select, &count_flags, templates);
+    if (result == 1) {
+      if (count_flags == 0){
+        print_error();
+      } else {
+        print_msg();
+      }
+    } else if ((count_flags > 0) && (argc < 4) && (!select.e || !select.e)) print_msg();
+    else {
+        get_patterns(templates, argv, select);
+        open_files(argc, argv, select, templates);
     }
   }
-  return count_files;
+  return 0;
 }
 
-int comp_reg(const char **argv, const char *pattern, int count_files,
-             int flag_no_pattern, grep_flags const *select) {
-  int flag_err = 1;
-  for (int ind = 0; ind < count_files; ind++) {
-    FILE *file_ptr;
-    int file_arg = optind + ind + flag_no_pattern;
-    const char *file_name = argv[file_arg];
-    if ((file_ptr = fopen(file_name, "r")) == NULL) {
-      if (!select->s) {
-        fprintf(stderr, "my_grep: %s: %s\n", file_name, strerror(2));
-      }
-      flag_err = 2;
-    } else {
-      char is_l_select = 0;
-      regex_t reg_exp;
-      unsigned int num_strings = 0;
-      int reg = select->i ? regcomp(&reg_exp, pattern, REG_ICASE)
-                          : regcomp(&reg_exp, pattern, REG_EXTENDED);
-      if (reg != 0) {
-        char reg_errbuf[LITTLE_SIZE] = {0};
-        regerror(reg, &reg_exp, reg_errbuf, LITTLE_SIZE);
-        fprintf(stderr, "Regexp compilation failed: '%s'\n", reg_errbuf);
-        flag_err = 2;
-      }
-      if (flag_err != 2) {
-        char buf_str[BUFFER] = {0};
-        for (int num_str = 1; NULL != fgets(buf_str, BUFFER, file_ptr);
-             ++num_str) {
-          if ((!select->v && (regexec(&reg_exp, buf_str, 0, NULL, 0) == 0)) ||
-              (select->v && (regexec(&reg_exp, buf_str, 0, NULL, 0) != 0))) {
-            if (select->c) {
-              select->l ? num_strings = 1 : ++num_strings;
-            }
-            if (select->l) {
-              is_l_select = 1;
-            } else {
-              flag_err = opt_handler(file_name, count_files, num_str, buf_str,
-                                     pattern, select);
-            }
-          }
+void print_error(){
+  fprintf(stderr, "Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.\n");
+}
+
+void print_msg(){
+  fprintf(stderr, "grep: invalid max count\n");
+}
+
+int get_flags(int argc, char *argv[], grep_flags *select, int *count_flags,
+              char *templates) {
+  int iserror = 0, isflag = 0, count_e = 0;
+  while ((isflag = getopt_long(argc, argv, "e:ivclnhsf:o?", NULL, NULL)) != -1) {
+    switch (isflag) {
+      case 'e':
+        select->e = 1;
+        add_pattern(optarg, &count_e, templates, select);
+        break;
+      case 'i':
+        select->i = 1;
+        break;
+      case 'v':
+        select->v = 1;
+        break;
+      case 'c':
+        select->c = 1;
+        break;
+      case 'l':
+        select->l = 1;
+        break;
+      case 'n':
+        select->n = 1;
+        break;
+      case 'h':
+        select->h = 1;
+        break;
+      case 's':
+        select->s = 1;
+        break;
+      case 'f':
+        select->f = 1;
+        add_files(optarg, &count_e, templates, select);
+        break;
+      case 'o':
+        select->o = 1;
+        break;
+      case '?':
+        iserror = 1;
+        break;
+    }
+    if (iserror == 0) *count_flags += 1;
+  }
+  if (select->empty_line) select->o = 0;
+  if (select->c || select->l) select->n = 0;
+  if (select->v) select->o = 0;
+
+  return iserror;
+}
+
+void get_patterns(char *templates, char *argv[], grep_flags select) {
+  if (!select.e && !select.f) {
+    if (!argv[optind]) argv[optind] = ".";
+    strcat(templates, argv[optind]);
+    optind += 1;
+  }
+}
+
+void open_files(int argc, char *argv[], grep_flags select, char *templates) {
+  FILE *file = NULL;
+  int count = argc - optind;
+  if (count < 0) print_error();
+  else{
+    for (; optind < argc; optind++) {
+      if ((file = fopen(argv[optind], "r")) != NULL) {
+        if (!select.o && !select.v)
+          comp_reg(argv, templates, file, &select, count);
+        fclose(file);
+      } else {
+        if (select.s == 0) {
+          fprintf(stderr, "grep: %s: No such file or directory\n", argv[optind]);
         }
       }
-      if (select->c) {
-        flag_err = flag_c_handler(select, count_files, file_name, num_strings);
-      }
-      if (is_l_select == 1) {
-        printf("%s\n", file_name);
-        flag_err = 0;
-      }
-      regfree(&reg_exp);
-      fclose(file_ptr);
     }
   }
-  return flag_err;
 }
 
-int opt_handler(const char *file_name, int count_files, int num_str,
-                char *buf_str, const char *pattern, grep_flags const *select) {
-  int flag_err = 1;
-  if (!select->c) {
-    if (count_files > 1 && !select->h) {
-      printf("%s:", file_name);
-    }
-    if (select->n) {
-      printf("%d:", num_str);
-    }
-    if (select->o && !select->v) {
-      flag_err = flag_o_handler(select, buf_str, pattern);
-    } else {
-      fputs(buf_str, stdout);
-      flag_err = 0;
-    }
-    if (!select->o) {
-      int n = strlen(buf_str);
-      if (buf_str[n] == '\0' && buf_str[n - 1] != '\n') {
-        putchar('\n');
+void comp_reg(char *argv[], char *templates, FILE *file, grep_flags *select,
+              int count_files) {
+  regex_t reg;
+  regmatch_t pmatch[2] = {0};
+  size_t nmatch = 1;
+  int err, num_line = 1, lines_count = 0, is_i_select = 0;
+  char string[256];
+  if (select->i) is_i_select = REG_ICASE;
+    err = regcomp(&reg, templates, REG_EXTENDED | is_i_select);
+  if (err != 0) {
+    char err_msg[50];
+    regerror(err, &reg, err_msg, 50);
+    fprintf(stderr, "Error regular expression '%s': %s\n", templates, err_msg);
+    exit(3);
+  }
+  while (!feof(file)) {
+    if (fgets(string, 256, file)) {
+      err = regexec(&reg, string, nmatch, pmatch, 0);
+      if (select->v) err = err ? 0 : 1;
+      if (!err) {
+        if (!select->c && !select->l) {
+          int count_line = 1;
+          if (count_files > 1 && !select->h) printf("%s:", argv[optind]);
+          if (select->n) printf("%d:", num_line);
+          if (select->o && select->f){
+            fprintf(stderr, "grep: %s: No such file or directory\n", argv[optind]);
+          }
+          if (select->o && !select->v) {
+            count_line = 0;
+            char *ptr = string;
+            while (!err) {
+              if (pmatch[0].rm_eo == pmatch[0].rm_so) break;
+              printf("%.*s\n", (int)(pmatch[0].rm_eo - pmatch[0].rm_so),
+                     ptr + pmatch[0].rm_so);
+              ptr += pmatch[0].rm_eo;
+              err = regexec(&reg, ptr, nmatch, pmatch, REG_NOTBOL);
+            }
+          }
+          if (!select->o || select->v) printf("%s", string);
+          if (string[strlen(string) - 1] != '\n' && count_line) printf("\n");
+        }
+        lines_count++;
       }
+      num_line++;
     }
   }
-  return flag_err;
+  if (select->c) {
+    if (count_files > 1 && !select->h && !select->l) printf("%s:", argv[optind]);
+    if (select->l && lines_count) lines_count--;
+    else if (1 && !select->l) {
+      printf("%d\n", lines_count);
+    }
+  }
+  if (select->l && lines_count) {
+    printf("%s\n", argv[optind]);
+  }
+  regfree(&reg);
 }
 
-int flag_c_handler(grep_flags const *select, int count_files,
-                   const char *file_name, unsigned int num_strings) {
-  int flag_err = 1;
-  if ((count_files > 1) && !select->h) {
-    printf("%s:%u\n", file_name, num_strings);
-    flag_err = 0;
+void add_pattern(char *optarg, int *count_e, char *templates,
+                 grep_flags *select) {
+  if (*count_e) {
+    char *ch = "|";
+    strcat(templates, ch);
+  }
+  if (!*optarg) {
+    optarg = ".";
+    select->empty_line = 1;
+  }
+  strcat(templates, optarg);
+  *count_e += 1;
+}
+
+void add_files(char *optarg, int *e_count, char *templates,
+               grep_flags *select) {
+  FILE *file = NULL;
+  int empty_count = select->empty_line;
+  if ((file = fopen(optarg, "r")) == NULL) {
+    if (select->s == 0) {
+      fprintf(stderr, "grep: %s: No such file or directory\n", optarg);
+      exit(2);
+    }
   } else {
-    printf("%u\n", num_strings);
-    flag_err = 0;
-  }
-  return flag_err;
-}
-
-int flag_o_handler(grep_flags const *select, char *buf_str,
-                   const char *pattern) {
-  int flag_err = 1;
-  regex_t reg_exp;
-  int reg = select->i ? regcomp(&reg_exp, pattern, REG_ICASE)
-                      : regcomp(&reg_exp, pattern, REG_EXTENDED);
-  if (0 != reg) {
-    char reg_buf[LITTLE_SIZE] = {0};
-    regerror(reg, &reg_exp, reg_buf, LITTLE_SIZE);
-    fprintf(stderr, "Regexp compilation failed: '%s'\n", reg_buf);
-    flag_err = 2;
-  }
-  if (0 == reg && !select->v) {
-    regmatch_t pmatch[BUFFER];
-    char *s = buf_str;
-    for (int i = 0; buf_str[i] != '\0'; ++i) {
-      if (0 != regexec(&reg_exp, s, 1, pmatch, 0)) {
-        break;
+    while (!feof(file)) {
+      if (*e_count) {
+        char *ch = "|";
+        strcat(templates, ch);
       }
-      printf("%.*s\n", (int)(pmatch->rm_eo - pmatch->rm_so), s + pmatch->rm_so);
-      s += pmatch->rm_eo;
-      flag_err = 0;
-    }
-  }
-  regfree(&reg_exp);
-  return flag_err;
-}
-
-int flag_f_handler(char *pattern) {
-  int flag_err = 1;
-  FILE *file_pattern_ptr;
-  const char *file_name_pattern = optarg;
-  if (NULL == (file_pattern_ptr = fopen(file_name_pattern, "r"))) {
-    fprintf(stderr, "grep: %s: %s\n", file_name_pattern, strerror(2));
-    flag_err = 2;
-  } else {
-    char buf_pattern[BUFFER] = {0};
-    while (NULL != fgets(buf_pattern, BUFFER, file_pattern_ptr)) {
-      if ('\n' == *buf_pattern) {
-        strcpy(pattern, ".*\0");
-      } else {
-        buf_pattern[strlen(buf_pattern) - 1] = '\0';
-        get_pattern(pattern, buf_pattern);
+      size_t cur_len = strlen(templates);
+      size_t new_len;
+      fgets(templates + cur_len, 256, file);
+      char *nch = strrchr(templates, 10);
+      if (nch) *nch = '\0';
+        new_len = strlen(templates);
+      if (new_len == cur_len) {
+        select->empty_line++;
+        char *all = ".";
+        strcat(templates, all);
       }
+      *e_count += 1;
     }
-    fclose(file_pattern_ptr);
+    fclose(file);
   }
-  return flag_err;
+  if (templates[strlen(templates) - 1] == '.') {
+    if ((select->empty_line - empty_count) == 1)
+      select->empty_line = empty_count;
+    templates[strlen(templates) - 1] = '\0';
+  }
 }

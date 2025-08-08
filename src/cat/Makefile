@@ -1,33 +1,18 @@
-SHELL := /bin/bash
-TARGET = ./my_cat
-CC = gcc 
-CFLAGS:=-Wall -Werror -Wextra -std=c11
-RM = rm -rf 
+CC = gcc
+CFLAGS = -Wall -Werror -Wextra -std=c11
+TARGET = my_cat
 SRC = my_cat.c
+TEST_SCRIPT = t_cat.sh
 
 all: $(TARGET)
 
-my_cat: my_cat.o
-	$(CC) $(CFLAGS) my_cat.o -o $(TARGET)
-	rm -rf *.o
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
-my_cat.o: $(SRC) my_cat.h
-	$(CC) $(CFLAGS) $(SRC) -c
-
-test:
-	bash t_cat.sh
-
-format-check:
-	cp ../../materials/linters/.clang-format ./
-	clang-format -n *.c *.h
-	rm .clang-format
-
-format:
-	cp ../../materials/linters/.clang-format ./
-	clang-format -i *.c *.h
-	rm .clang-format
+test: $(TARGET)
+	@bash $(TEST_SCRIPT)
 
 clean:
-	$(RM) *.o $(TARGET) log.txt my_cat.txt cat.txt
+	rm -f $(TARGET) *.o log.txt
 
-rebuild: clean $(TARGET)
+.PHONY: all test clean
