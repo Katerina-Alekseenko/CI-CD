@@ -76,43 +76,43 @@ int print_text(char *files) {
 int get_flags(int *isflag, cat_flags *select, int *count_flags) {
   int iserror = 0;
   switch (*isflag) {
-  case 'b':
-    select->b = 1;
-    *count_flags += 1;
-    break;
-  case 'e':
-    select->e = 1;
-    select->v = 1;
-    *count_flags += 2;
-    break;
-  case 'E':
-    select->e = 1;
-    *count_flags += 1;
-    break;
-  case 'n':
-    select->n = 1;
-    *count_flags += 1;
-    break;
-  case 's':
-    select->s = 1;
-    *count_flags += 1;
-    break;
-  case 't':
-    select->t = 1;
-    select->v = 1;
-    *count_flags += 2;
-    break;
-  case 'T':
-    select->t = 1;
-    *count_flags += 1;
-    break;
-  case 'v':
-    select->v = 1;
-    *count_flags += 1;
-    break;
-  default:
-    iserror = 1;
-    break;
+    case 'b':
+      select->b = 1;
+      *count_flags += 1;
+      break;
+    case 'e':
+      select->e = 1;
+      select->v = 1;
+      *count_flags += 2;
+      break;
+    case 'E':
+      select->e = 1;
+      *count_flags += 1;
+      break;
+    case 'n':
+      select->n = 1;
+      *count_flags += 1;
+      break;
+    case 's':
+      select->s = 1;
+      *count_flags += 1;
+      break;
+    case 't':
+      select->t = 1;
+      select->v = 1;
+      *count_flags += 2;
+      break;
+    case 'T':
+      select->t = 1;
+      *count_flags += 1;
+      break;
+    case 'v':
+      select->v = 1;
+      *count_flags += 1;
+      break;
+    default:
+      iserror = 1;
+      break;
   }
   return iserror;
 }
