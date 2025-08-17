@@ -1,5 +1,5 @@
-TELEGRAM_BOT_TOKEN=7244418178:здесь_ваш_токен
-TELEGRAM_USER_ID=321769981
+TELEGRAM_BOT_TOKEN=здесь_ваш_токен:здесь_ваш_токен
+TELEGRAM_USER_ID=здесь_ваш_id
 TIME="10"
 if [ "$CI_JOB_STATUS" == "success" ]; then
   MESSAGE="Done ✅"
